@@ -1,0 +1,67 @@
+#!/bin/bash
+
+DIRNAME=$(dirname "$0")
+SCRIPT_PATH=$(cd "$DIRNAME"; pwd -P)
+. "$SCRIPT_PATH/config"
+
+QUEUE="$1"
+shift 1
+. "$SCRIPT_PATH/config"
+if [ -e "$SCRIPT_PATH/config.$QUEUE" ]; then
+    . "$SCRIPT_PATH/config.$QUEUE"
+fi
+
+if [ -n "$1" ]; then
+    NUMBER="$1"
+    shift 1
+else
+    NUMBER="1"
+fi
+
+(cat - <<EOF
+#!/bin/bash
+#SBATCH -A $SLURM_PROJECT
+$(if [ -n "$SLURM_PARTITION" ]; then
+    echo "#SBATCH -p $SLURM_PARTITION"
+fi)
+#SBATCH -n $SLURM_GPUS
+#SBATCH -c $SLURM_CPUS_PER_GPU
+#SBATCH --gpus=$SLURM_GPUS
+#SBATCH -t $SLURM_TIMEOUT
+
+VASP_PSEUDO_PATH="$VASP_PSEUDO_PATH"
+REMOTE_HTTK_DIR="$REMOTE_HTTK_DIR"
+
+# Vasp on GPUs runs one MPI rank per GPU, VASP_GPU makes the vasp tasks set NPAR for NCORE=1
+export HT_NBR_NODES="\$SLURM_NTASKS"
+export VASP_GPU="1"
+export VASP_PSEUDOLIB=\${VASP_PSEUDO_PATH/#\~/\$HOME}
+export HTTK_BASE_DIR=\${REMOTE_HTTK_DIR/#\~/\$HOME}
+export HTTK_DIR=\$HTTK_BASE_DIR/httk
+export VASP_EXECUTE="$VASP_COMMAND"
+
+# Each MPI rank uses OpenMP threads on the CPU cores next to its GPU, settings as
+# recommended by the vasp wiki. SRUN_CPUS_PER_TASK makes srun bind each rank to
+# VASP_OMP_THREADS cores instead of all cores allocated per GPU.
+export OMP_NUM_THREADS="$VASP_OMP_THREADS"
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+export OMP_STACKSIZE=512m
+export SRUN_CPUS_PER_TASK="$VASP_OMP_THREADS"
+
+DATE=\$(date +"%Y-%m-%d_%H.%M.%S")
+INITIAL=\$(pwd -P)
+HOSTNAME=\$(hostname)
+
+echo "RUN STARTS: \$DATE in dir \$INITIAL on node: \$HOSTNAME"
+
+source "\$HTTK_DIR/init.shell"
+
+$SETUP_COMMANDS
+
+"\$HTTK_DIR/Execution/taskmanager.sh" -d .. -t "$TASKMGR_JOB_TIMEOUT" "$@"
+
+ENDDATE=\$(date +"%Y-%m-%d_%H.%M.%S")
+echo "RUN ENDS: \$ENDDATE"
+EOF
+) | ssh "$USERNAME"@"$REMOTE_HOST" "mkdir -p \"${REMOTE_HTTK_DIR/#\~\//}/Runs/\"$QUEUE\"/ht.taskmgrstats\"; cd \"${REMOTE_HTTK_DIR/#\~\//}/Runs/\"$QUEUE\"/ht.taskmgrstats\"; cat - > ht.tmp.batch.q; for (( i=0; i<$NUMBER; i++)); do sbatch ht.tmp.batch.q; done"

@@ -1,0 +1,13 @@
+REMOTE_HTTK_DIR="Httk-runs"
+REMOTE_HOST="supercomputer.example.com"
+USERNAME="my_login_name"
+VASP_COMMAND="srun --mem=0 --mpi=pmix -m block:block vasp_std"
+SETUP_COMMANDS=''
+VASP_PSEUDO_PATH="/path/to/pseudopotential/library"
+VASP_OMP_THREADS="8"
+SLURM_PROJECT="liu1"
+SLURM_PARTITION="gpu"
+SLURM_GPUS="1"
+SLURM_CPUS_PER_GPU="72"
+SLURM_TIMEOUT="3-00:00:00"
+TASKMGR_JOB_TIMEOUT="3600"

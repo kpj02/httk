@@ -460,7 +460,13 @@ function VASP_PREPARE_INCAR {
 
     local NPAR=$(VASP_GET_TAG NPAR)
     if [ -z "$NPAR" -a -n "$HT_NBR_NODES" ]; then
-	NPAR=$(HT_FCALC "int(sqrt($HT_NBR_NODES))")
+	if [ -n "$VASP_GPU" ]; then
+	    # Vasp on GPUs only supports NCORE=1, i.e., NPAR = ranks / KPAR
+	    local KPAR=$(VASP_GET_TAG KPAR)
+	    NPAR=$(( HT_NBR_NODES / ${KPAR:-1} ))
+	else
+	    NPAR=$(HT_FCALC "int(sqrt($HT_NBR_NODES))")
+	fi
 	if [ "$NPAR" -le 1 ]; then
 	    NPAR=1
 	fi

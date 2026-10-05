@@ -415,7 +415,14 @@ def VASP_PREPARE_INCAR(ACCURACY=None, EDIFFMARGIN=None):
 
     NPAR = VASP_GET_TAG("NPAR")
     if NPAR is None and HT_NBR_NODES is not None:
-        NPAR = int(math.sqrt(HT_NBR_NODES))
+        if "VASP_GPU" in os.environ:
+            # Vasp on GPUs only supports NCORE=1, i.e., NPAR = ranks / KPAR
+            KPAR = VASP_GET_TAG("KPAR")
+            if KPAR is None:
+                KPAR = 1
+            NPAR = HT_NBR_NODES // KPAR
+        else:
+            NPAR = int(math.sqrt(HT_NBR_NODES))
         if NPAR < 1:
             NPAR = 1
         VASP_SET_TAG("NPAR", NPAR)
